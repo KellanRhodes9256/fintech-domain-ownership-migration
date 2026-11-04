@@ -1,6 +1,6 @@
 # Prove a fintech domain before onboarding
 
-The decision is simple: onboarding becomes `ready` only after a TXT record is written, the domain is verified, and the user behind the company email is found. Infrai keeps both capability groups behind one key and one base URL, so the example shows the complete handoff without introducing a second client.
+The decision path is straightforward, and it should stay that way: onboarding becomes `ready` only after a TXT record has been written, the domain has been verified, and the user behind the company email has been located. Infrai keeps both capability groups behind one key and one base_url, so this example shows the full handoff end to end without dragging in a second client or a second auth story.
 
 ## Runnable path
 
@@ -11,19 +11,19 @@ npm install
 npm run start
 ```
 
-The service first obtains `zone_id` with `dns.domain.get`, creates the domain when needed, and uses that identifier for `dns.record.upsert`; it never sends a domain string where the record API expects a zone. The final lookup uses `auth.user.get_by_email` with the same authorization header and base URL.
+The service first obtains `zone_id` with `dns.domain.get`, creates the domain if it does not already exist, and then uses that identifier for `dns.record.upsert`; it does not send a domain string to an API that expects a zone identifier. The final lookup calls `auth.user.get_by_email` with the same authorization header and the same base URL.
 
 ## Why the order matters
 
-The write is followed by `dns.domain.verify`, then the user lookup, which makes the returned `ready` state auditable as a sequence of concrete events. The HTTP client decodes `{ok, data, error, metadata}` before inspecting the status code, retries 429 responses with exponential delay, and keeps the caller-facing error as a rejected request rather than turning it into a server fault.
+The write is followed by `dns.domain.verify`, then the user lookup. That ordering makes the returned `ready` state something you can actually audit as a sequence of concrete events instead of a vague success flag. The HTTP client decodes `{ok, data, error, metadata}` before it looks at the status code, retries 429 responses with exponential backoff, and keeps the caller-facing error as a rejected request instead of misclassifying it as a server fault.
 
 ## Migration checklist and rollback
 
-Before cutover, compare the incumbent in-house TXT check with this flow in a staging domain, record the returned `zone_id`, and confirm that the audit log contains the TXT write, verification, and user lookup. At cutover, route the onboarding decision to `proveFintechOwnership` and retain the previous check behind a feature flag. To roll back, disable that flag and stop new writes; existing DNS records remain unchanged and can be removed through the normal DNS record lifecycle after the old path is serving traffic.
+Before cutover, compare your current in-house TXT check against this flow in a staging domain, record the returned `zone_id`, and verify that the audit log shows the TXT write, verification, and user lookup in that order. At cutover, route the onboarding decision to `proveFintechOwnership` and keep the previous check behind a feature flag. If you need to roll back, turn that flag off and stop new writes; existing DNS records stay as they are and can be removed later through the normal DNS record lifecycle once the old path is serving traffic again.
 
 ## Focused verification
 
-The unit test supplies a deterministic missing-domain response and checks the business result plus the exact order of calls:
+The unit test provides a deterministic missing-domain response and checks both the business result and the exact call order:
 
 ```sh
 npm test
@@ -34,7 +34,7 @@ The expected test output is `domain ownership decision: ready`.
 
 ## Wiring it up for real: Fintech Domain Ownership Migration
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Fintech Domain Ownership Migration.
+The snippet above is intentionally copy-paste simple. Before shipping it, there are a few **required** steps. The details below apply to Fintech Domain Ownership Migration.
 
 **Account & key**
 
